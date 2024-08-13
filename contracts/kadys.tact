@@ -16,6 +16,7 @@ contract Kadys with Deployable, Ownable {
     yearlyPercent: Int;
     contractJettonWallet: Address?;
 
+    //TODO after update percent update every key in map
     init() {
         // deployer = owner
         self.owner = sender();
@@ -118,14 +119,13 @@ contract Kadys with Deployable, Ownable {
         destination: context().sender,
         response_destination: myAddress(),
         custom_payload: null,
-        forward_ton_amount: ton("0.000001"),
-        forward_payload: emptySlice()
+        forward_ton_amount: ton("0.01"),
+        forward_payload: beginCell().storeInt(0, 64).asSlice(),
         }.toCell()
         }
         );
         emit(UnstakeEvent{
         address: sender, amount: msg.amount}.toCell());
-        self.reply("Refund gas excess".asComment());
     }
     receive(msg: WithdrawEarned){
         require(msg.amount > 0, "Amount must be above zero");
@@ -147,7 +147,7 @@ contract Kadys with Deployable, Ownable {
         destination: context().sender,
         response_destination: myAddress(),
         custom_payload: null,
-        forward_ton_amount: ton("0.000001"),
+        forward_ton_amount: 0,
         forward_payload: emptySlice()
         }.toCell()
         }
