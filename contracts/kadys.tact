@@ -16,9 +16,7 @@ contract Kadys with Deployable, Ownable {
     yearlyPercent: Int;
     contractJettonWallet: Address?;
 
-    //TODO after update percent update every key in map
     init() {
-        // deployer = owner
         self.owner = sender();
         // Using scale factor to handle decimals
         self.yearlyPercent = 18 * scaleFactor / 100;
@@ -26,6 +24,21 @@ contract Kadys with Deployable, Ownable {
     }
 
     // --PRIVATE--
+    fun updateAllDepositAt(){
+        foreach (key, value in self.balanceOf) {
+            self.updateUserRewards(key);
+            self.updateLastDepositDate(key, now());
+        }
+    }
+    fun updateClaimed(user: Address, amount: Int){
+        let claimed: Int? = self.claimedFromStake.get(user);
+        if(claimed == null){
+            self.claimedFromStake.set(user, amount);
+        } else {
+            let userClaimed = claimed!!;
+            self.claimedFromStake.set(user, amount + userClaimed);
+        }
+    }
     // Func is used to calculate rewards by user
     fun decreaseUserStake(user: Address, amount: Int){
         require(self.balanceOf.get(user) != null, "User not found");
@@ -80,19 +93,14 @@ contract Kadys with Deployable, Ownable {
     receive(msg: TokenNotification){
         require(msg.amount > 0, "Amount must be above zero");
         require(self.contractJettonWallet != null, "Jetton address must be sent");
-        dump(msg.amount);
-        dump(msg.queryId);
-        //TODO tests
         require(context().sender == self.contractJettonWallet, "Not from the jetton wallet");
         let userStaked: UserStake? = self.balanceOf.get(msg.sender);
         if(userStaked == null){
-            dump("userstake null");
             self.balanceOf.set(msg.sender, UserStake{
             totalDeposit: msg.amount, lastDepositAt: now()});
             self.updateUserRewards(msg.sender);
         } else {
             let currentStake= userStaked!!;
-            dump(currentStake.totalDeposit);
             self.updateUserRewards(msg.sender);
             self.increaseUserStake(msg.sender, msg.amount);
         }
@@ -109,23 +117,25 @@ contract Kadys with Deployable, Ownable {
         self.updateClaimed(sender, msg.amount);
         self.totalSupply -= msg.amount;
         send(SendParameters{
-        to: self.contractJettonWallet!!,
-        value: 0,
-        mode: (SendRemainingValue + SendIgnoreErrors),
-        bounce: false, // 0x7362d09c - notify new owner
-        body: TokenTransfer{
-        queryId: now(),
-        amount: msg.amount,
-        destination: context().sender,
-        response_destination: myAddress(),
-        custom_payload: null,
-        forward_ton_amount: ton("0.01"),
-        forward_payload: beginCell().storeInt(0, 64).asSlice(),
+            to: self.contractJettonWallet!!,
+            value: ton("0.000001"),
+            mode: (SendRemainingValue + SendIgnoreErrors),
+            bounce: false, // 0x7362d09c - notify new owner
+            body: TokenTransfer{
+                queryId: now(),
+                amount: msg.amount,
+                destination: context().sender,
+                response_destination: myAddress(),
+                custom_payload: null,
+                forward_ton_amount: ton("0.0000001"),
+                //working on tests
+                forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
         }.toCell()
         }
         );
         emit(UnstakeEvent{
         address: sender, amount: msg.amount}.toCell());
+        self.reply("Refund gas excess".asComment());
     }
     receive(msg: WithdrawEarned){
         require(msg.amount > 0, "Amount must be above zero");
@@ -136,39 +146,32 @@ contract Kadys with Deployable, Ownable {
         require(earned >= scaledMsgAmount, "Amount is above the earned value");
         self.userEarned.set(sender, earned - scaledMsgAmount);
         self.updateLastDepositDate(sender, now());
-        send(SendParameters{
-        to: self.contractJettonWallet!!,
-        value: 0,
-        mode: (SendRemainingValue + SendIgnoreErrors),
-        bounce: false, // 0x7362d09c - notify new owner
-        body: TokenTransfer{
-        queryId: now(),
-        amount: msg.amount,
-        destination: context().sender,
-        response_destination: myAddress(),
-        custom_payload: null,
-        forward_ton_amount: 0,
-        forward_payload: emptySlice()
-        }.toCell()
+        send(
+        SendParameters{
+            to: self.contractJettonWallet!!,
+            value: ton("0.000001"),
+            mode: (SendRemainingValue + SendIgnoreErrors),
+            bounce: false, // 0x7362d09c - notify new owner
+            body: TokenTransfer{
+                queryId: now(),
+                amount: msg.amount,
+                destination: context().sender,
+                response_destination: myAddress(),
+                custom_payload: null,
+                forward_ton_amount: ton("0.000001"),
+                forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+        }
+            .toCell()
         }
         );
-        self.reply("Refund gas excess".asComment());
-    }
-    fun updateClaimed(user: Address, amount: Int){
-        let claimed: Int? = self.claimedFromStake.get(user);
-        if(claimed == null){
-            self.claimedFromStake.set(user, amount);
-        } else {
-            let userClaimed = claimed!!;
-            self.claimedFromStake.set(user, amount + userClaimed);
-        }
     }
     receive(msg: ChangeYearlyPercent){
         require(sender() == self.owner, "Only owner is allowed to call ChangeYearlyPercent");
         require(msg.newPercent > 0, "New yearly percent must be above zero");
-        self.yearlyPercent = msg.newPercent;
+        // We are updating all of the last deposits earned and store them inside earned map before updating the percent
+        self.updateAllDepositAt();
+        self.yearlyPercent = msg.newPercent * scaleFactor /100;
         self.reply("Refund gas excess".asComment());
-        require(sender() == self.owner, "Only owner is allowed to calcEarned");
     }
     //Withraw
     receive(msg: Withdraw) {

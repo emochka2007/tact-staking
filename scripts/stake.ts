@@ -15,7 +15,7 @@ export async function run(provider: NetworkProvider) {
     }
     await sendJetton({
         destination: kadysAddress,
-        amount: toNano('0.00000001'),
+        amount: toNano('0.1'),
         provider,
     });
 }

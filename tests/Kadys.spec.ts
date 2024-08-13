@@ -376,7 +376,6 @@ describe('Kadys', () => {
         });
         it('should update user jetton balance after unstake', async () => {
             const deployerBalance = await deployerJettonWallet.getGetWalletData();
-            console.log('=>(Kadys.spec.ts:379) deployerBalance', deployerBalance);
             await kadys.send(
                 deployer.getSender(),
                 {
@@ -388,7 +387,6 @@ describe('Kadys', () => {
                 },
             );
             const updateBalance = await deployerJettonWallet.getGetWalletData();
-            console.log('=>(Kadys.spec.ts:391) updateBalance', updateBalance);
             expect(updateBalance.balance).toEqual(deployerBalance.balance + toNano(10));
         });
     });
@@ -603,6 +601,51 @@ describe('Kadys', () => {
                 exitCode: 53383,
             });
         });
+        it('should correctly sum earned after changing yearly percent', async () => {
+            blockchain.now = startDate + secondsInWeek;
+            await sendJettonTest({
+                jettonWallet: playerJettonWallet,
+                amount: toNano(100),
+                sender: player,
+                destination: kadys.address,
+            });
+            blockchain.now = blockchain.now + secondsInWeek;
+            await sendJettonTest({
+                jettonWallet: playerJettonWallet,
+                amount: toNano(200),
+                sender: player,
+                destination: kadys.address,
+            });
+            blockchain.now = blockchain.now + secondsInWeek;
+            await kadys.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'ChangeYearlyPercent',
+                    newPercent: 25n,
+                },
+            );
+            await sendJettonTest({
+                jettonWallet: playerJettonWallet,
+                amount: toNano(300),
+                sender: player,
+                destination: kadys.address,
+            });
+            blockchain.now = blockchain.now + secondsInWeek;
+            const earnedInOneDay = toNano(0.18 / 365);
+            const newEarnedInOneDay = Number(toNano(0.25 / 365));
+            const numerizedEarnedInOneDay = Number(earnedInOneDay);
+            const allEarned = await kadys.getEarned();
+            const earned = await kadys.getEarnedOfAddress(player.address);
+            const earnedFromNano = fromEarnedToNumber(earned);
+            const expectedEarned =
+                numerizedEarnedInOneDay * 7 * 100 +
+                numerizedEarnedInOneDay * 3 * 7 * 100 +
+                newEarnedInOneDay * 6 * 7 * 100;
+            expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
+        });
     });
     describe('Withdraw', () => {
         it('should withdraw correct sum when called by owner', async () => {
@@ -713,7 +756,6 @@ describe('Kadys', () => {
                 },
             );
             const afterWithdrawJettonData = await deployerJettonWallet.getGetWalletData();
-            console.log('=>(Kadys.spec.ts:736) afterWithdrawJettonData', afterWithdrawJettonData);
             expect(afterWithdrawJettonData.balance).toBe(initialJettonData.balance + toNano(1));
             expect(response.transactions).toHaveTransaction({
                 from: deployer.address,
