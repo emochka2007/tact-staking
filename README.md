@@ -8,7 +8,8 @@
 -   `scripts` - scripts used by the project, mainly the deployment scripts.
 
 ## How to use
-
+### Environment 
+Fill the `.env` file with variables from `.env.example`
 ### Build
 
 `npx blueprint build` or `npm run build`
