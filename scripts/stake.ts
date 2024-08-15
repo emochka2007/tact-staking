@@ -1,20 +1,17 @@
 import { NetworkProvider } from '@ton/blueprint';
 import { Address, toNano } from '@ton/core';
 import { sendJetton } from '../tests/utils';
-import { getJettonAddress } from '../utils/jetton.util';
-import { Kadys } from '../build/Kadys/tact_Kadys';
+import { Staking } from '../build/Staking/tact_Staking';
 
 export async function run(provider: NetworkProvider) {
-    const kadysAddress = Address.parse(process.env.KADYS_ADDRESS!!);
-    const minterAddress = Address.parse(process.env.MINTER_ADDRESS!!);
-    const kadys = provider.open(Kadys.fromAddress(kadysAddress));
-    const walletAddress = await kadys.getJettonWallet();
-    console.log('=>(stake.ts:12) walletAddress', walletAddress);
+    const stakingAddress = Address.parse(process.env.STAKING_ADDRESS!!);
+    const staking = provider.open(Staking.fromAddress(stakingAddress));
+    const walletAddress = await staking.getJettonWallet();
     if (walletAddress === null) {
         throw new Error('Setup wallet first');
     }
     await sendJetton({
-        destination: kadysAddress,
+        destination: stakingAddress,
         amount: toNano('0.1'),
         provider,
     });

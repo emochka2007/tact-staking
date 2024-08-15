@@ -1,7 +1,7 @@
 import "@stdlib/deploy";
 import "@stdlib/ownable";
 import "./messages";
-contract Kadys with Deployable, Ownable {
+contract Staking with Deployable, Ownable {
     // store here user staked coins
     userEarned: map<Address, Int>;
     // Total Supply of stake

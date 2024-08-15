@@ -1,21 +1,21 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { beginCell, toNano } from '@ton/core';
 import '@ton/test-utils';
-import { Kadys, loadStakeEvent, loadUnstakeEvent } from '../build/Kadys/tact_Kadys';
 import { JettonDefaultWallet } from '../build/Jetton/tact_JettonDefaultWallet';
 import { SampleJetton } from '../build/Jetton/tact_SampleJetton';
 import { mint, sendJettonTest } from './utils';
 import { fromEarnedToNumber } from './number';
+import { loadStakeEvent, loadUnstakeEvent, Staking } from '../build/Staking/tact_Staking';
 const secondsInDay = 24 * 60 * 60;
 const secondsInWeek = 24 * 60 * 60 * 7;
 const secondsInYear = 24 * 60 * 60 * 365;
-describe('Kadys', () => {
+describe('Staking', () => {
     let blockchain: Blockchain;
     let deployer: SandboxContract<TreasuryContract>;
-    let kadys: SandboxContract<Kadys>;
+    let staking: SandboxContract<Staking>;
     let deployerJettonWallet: SandboxContract<JettonDefaultWallet>;
     let playerJettonWallet: SandboxContract<JettonDefaultWallet>;
-    let kadysJettonWallet: SandboxContract<JettonDefaultWallet>;
+    let stakingJettonWallet: SandboxContract<JettonDefaultWallet>;
     let minter: SandboxContract<SampleJetton>;
     let player: SandboxContract<TreasuryContract>;
     let startDate: number;
@@ -58,9 +58,9 @@ describe('Kadys', () => {
         playerJettonWallet = blockchain.openContract(
             await JettonDefaultWallet.fromInit(minter.address, player.address),
         );
-        kadys = blockchain.openContract(await Kadys.fromInit());
+        staking = blockchain.openContract(await Staking.fromInit());
         yearlyPercent = 18;
-        const deployResult = await kadys.send(
+        const deployResult = await staking.send(
             deployer.getSender(),
             {
                 value: toNano('0.05'),
@@ -70,21 +70,23 @@ describe('Kadys', () => {
                 queryId: 0n,
             },
         );
-        kadysJettonWallet = blockchain.openContract(await JettonDefaultWallet.fromInit(minter.address, kadys.address));
-        await kadys.send(
+        stakingJettonWallet = blockchain.openContract(
+            await JettonDefaultWallet.fromInit(minter.address, staking.address),
+        );
+        await staking.send(
             deployer.getSender(),
             {
                 value: toNano('0.05'),
             },
             {
                 $$type: 'SetContractJettonWallet',
-                wallet: kadysJettonWallet.address,
+                wallet: stakingJettonWallet.address,
             },
         );
         startDate = Math.floor(Date.now() / 1000);
         expect(deployResult.transactions).toHaveTransaction({
             from: deployer.address,
-            to: kadys.address,
+            to: staking.address,
             deploy: true,
             success: true,
         });
@@ -92,7 +94,6 @@ describe('Kadys', () => {
 
     it('should deploy', async () => {
         // the check is done inside beforeEach
-        // blockchain and kadys are ready to use
     });
     describe('Stake', () => {
         beforeEach(async () => {
@@ -102,11 +103,11 @@ describe('Kadys', () => {
                 jettonWallet: senderWallet,
                 amount: toNano(100),
                 sender: deployer,
-                destination: kadys.address,
+                destination: staking.address,
             });
             expect(transferResult.transactions).toHaveTransaction({
-                from: kadysJettonWallet.address,
-                to: kadys.address,
+                from: stakingJettonWallet.address,
+                to: staking.address,
                 success: true,
             });
         });
@@ -114,24 +115,24 @@ describe('Kadys', () => {
             //test inside before each
         });
         it('should update balance after stake', async () => {
-            const balance = await kadys.getBalanceOfAddress(deployer.address);
+            const balance = await staking.getBalanceOfAddress(deployer.address);
             expect(balance?.totalDeposit).toEqual(toNano(100));
         });
         it('should increase totalSupply after stake', async () => {
-            const totalSupply = await kadys.getTotalSupply();
+            const totalSupply = await staking.getTotalSupply();
             expect(totalSupply).toEqual(toNano(100));
         });
         it('should increase earned after stake and 1 day passed', async () => {
             // move 1 day
             blockchain.now = startDate + 24 * 60 * 60;
-            const earned = await kadys.getEarnedOfAddress(deployer.address);
+            const earned = await staking.getEarnedOfAddress(deployer.address);
             expect(earned).toEqual(toNano(yearlyPercent / 365));
         });
         it('should emit stakeEvent after stake', async () => {
             const stakeRes = await sendJettonTest({
                 jettonWallet: deployerJettonWallet,
                 sender: deployer,
-                destination: kadys.address,
+                destination: staking.address,
                 amount: toNano(100),
             });
             stakeRes.externals.forEach((ext) => {
@@ -142,21 +143,21 @@ describe('Kadys', () => {
             await sendJettonTest({
                 jettonWallet: deployerJettonWallet,
                 sender: deployer,
-                destination: kadys.address,
+                destination: staking.address,
                 amount: toNano(100),
             });
-            const balance = await kadys.getBalanceOfAddress(deployer.address);
+            const balance = await staking.getBalanceOfAddress(deployer.address);
             expect(balance?.totalDeposit).toEqual(toNano(200));
         });
         it('should handle two stakes with 2 different accounts', async () => {
             await sendJettonTest({
                 jettonWallet: playerJettonWallet,
                 sender: player,
-                destination: kadys.address,
+                destination: staking.address,
                 amount: toNano(33),
             });
-            const deployerBalance = await kadys.getBalanceOfAddress(deployer.address);
-            const playerBalance = await kadys.getBalanceOfAddress(player.address);
+            const deployerBalance = await staking.getBalanceOfAddress(deployer.address);
+            const playerBalance = await staking.getBalanceOfAddress(player.address);
             expect(deployerBalance?.totalDeposit).toEqual(toNano(100));
             expect(playerBalance?.totalDeposit).toEqual(toNano(33));
         });
@@ -164,13 +165,13 @@ describe('Kadys', () => {
             const stakeRes = await sendJettonTest({
                 jettonWallet: deployerJettonWallet,
                 sender: deployer,
-                destination: kadys.address,
+                destination: staking.address,
                 amount: toNano(0),
             });
             expect(stakeRes.transactions).toHaveTransaction({
-                from: kadysJettonWallet.address,
+                from: stakingJettonWallet.address,
                 success: false,
-                to: kadys.address,
+                to: staking.address,
                 exitCode: 61833,
             });
         });
@@ -180,11 +181,11 @@ describe('Kadys', () => {
             await sendJettonTest({
                 jettonWallet: deployerJettonWallet,
                 sender: deployer,
-                destination: kadys.address,
+                destination: staking.address,
                 amount: toNano(100),
             });
             const data = await deployerJettonWallet.getGetWalletData();
-            const unstakeRes = await kadys.send(
+            const unstakeRes = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -198,7 +199,7 @@ describe('Kadys', () => {
             expect(unstakeData.balance).toBe(data.balance + toNano(10));
             expect(unstakeRes.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: true,
             });
         });
@@ -206,7 +207,7 @@ describe('Kadys', () => {
             // realized in beforeEach
         });
         it('should throw an error when msg amount is less or equal zero', async () => {
-            const stakeRes = await kadys.send(
+            const stakeRes = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -219,12 +220,12 @@ describe('Kadys', () => {
             expect(stakeRes.transactions).toHaveTransaction({
                 from: deployer.address,
                 success: false,
-                to: kadys.address,
+                to: staking.address,
                 exitCode: 61833,
             });
         });
         it('should throw an error if user is not defined', async () => {
-            const stakeRes = await kadys.send(
+            const stakeRes = await staking.send(
                 player.getSender(),
                 {
                     value: toNano('0.05'),
@@ -237,12 +238,12 @@ describe('Kadys', () => {
             expect(stakeRes.transactions).toHaveTransaction({
                 from: player.address,
                 success: false,
-                to: kadys.address,
+                to: staking.address,
                 exitCode: 33670,
             });
         });
         it('should throw an error if users balance is less than amount to unstake', async () => {
-            const stakeRes = await kadys.send(
+            const stakeRes = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -255,12 +256,12 @@ describe('Kadys', () => {
             expect(stakeRes.transactions).toHaveTransaction({
                 from: deployer.address,
                 success: false,
-                to: kadys.address,
+                to: staking.address,
                 exitCode: 5157,
             });
         });
         it('should correctly update users balance', async () => {
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -270,12 +271,12 @@ describe('Kadys', () => {
                     amount: toNano(10),
                 },
             );
-            const balance = await kadys.getBalanceOfAddress(deployer.address);
+            const balance = await staking.getBalanceOfAddress(deployer.address);
             // 2 times unstake with 10 (first one is beforeEach)
             expect(balance?.totalDeposit).toEqual(toNano(80));
         });
         it('should correctly update claimed ', async () => {
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -285,11 +286,11 @@ describe('Kadys', () => {
                     amount: toNano(10),
                 },
             );
-            const claimed = await kadys.getClaimedByAddress(deployer.address);
+            const claimed = await staking.getClaimedByAddress(deployer.address);
             expect(claimed).toEqual(toNano(20));
         });
         it('should update totalSupply', async () => {
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -299,12 +300,12 @@ describe('Kadys', () => {
                     amount: toNano(10),
                 },
             );
-            const totalSupply = await kadys.getTotalSupply();
+            const totalSupply = await staking.getTotalSupply();
             // 100 - 20
             expect(totalSupply).toEqual(toNano(80));
         });
         it('should emit UnstakeEvent', async () => {
-            const stakeRes = await kadys.send(
+            const stakeRes = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -322,10 +323,10 @@ describe('Kadys', () => {
             await sendJettonTest({
                 jettonWallet: playerJettonWallet,
                 sender: player,
-                destination: kadys.address,
+                destination: staking.address,
                 amount: toNano(100),
             });
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -335,7 +336,7 @@ describe('Kadys', () => {
                     amount: toNano(10),
                 },
             );
-            await kadys.send(
+            await staking.send(
                 player.getSender(),
                 {
                     value: toNano('0.05'),
@@ -345,13 +346,13 @@ describe('Kadys', () => {
                     amount: toNano(25),
                 },
             );
-            const deployerBalance = await kadys.getBalanceOfAddress(deployer.address);
-            const playerBalance = await kadys.getBalanceOfAddress(player.address);
+            const deployerBalance = await staking.getBalanceOfAddress(deployer.address);
+            const playerBalance = await staking.getBalanceOfAddress(player.address);
             expect(deployerBalance?.totalDeposit).toEqual(toNano(80n));
             expect(playerBalance?.totalDeposit).toEqual(toNano(75n));
         });
         it('should correctly update balance after 2 unstakings for 1 user', async () => {
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -361,7 +362,7 @@ describe('Kadys', () => {
                     amount: toNano(10),
                 },
             );
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -371,12 +372,12 @@ describe('Kadys', () => {
                     amount: toNano(25),
                 },
             );
-            const deployerBalance = await kadys.getBalanceOfAddress(deployer.address);
+            const deployerBalance = await staking.getBalanceOfAddress(deployer.address);
             expect(deployerBalance?.totalDeposit).toEqual(toNano(55));
         });
         it('should update user jetton balance after unstake', async () => {
             const deployerBalance = await deployerJettonWallet.getGetWalletData();
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -396,34 +397,34 @@ describe('Kadys', () => {
                 await sendJettonTest({
                     jettonWallet: deployerJettonWallet,
                     sender: deployer,
-                    destination: kadys.address,
+                    destination: staking.address,
                     amount: toNano(1),
                 });
             });
             it('should return correct earned after deposit with 1 TON and 1 day passed', async () => {
                 blockchain.now = startDate + secondsInDay;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = Number(earned / scaleFactor);
                 const expectedEarned = Number(earnedInOneDay) / Number(scaleFactor);
                 expect(earnedFromNano).toBeCloseTo(expectedEarned);
             });
             it('should return correct earned after deposit with 1 TON and 1 week passed', async () => {
                 blockchain.now = startDate + secondsInWeek;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = Number(earned / scaleFactor);
                 const expectedEarned = (Number(earnedInOneDay) * 7) / Number(scaleFactor);
                 expect(earnedFromNano).toBeCloseTo(expectedEarned);
             });
             it('should return correct earned after deposit with 1 TON and 1 year passed', async () => {
                 blockchain.now = startDate + secondsInYear;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned = (Number(earnedInOneDay) * 365) / Number(scaleFactor);
                 expect(earnedFromNano).toBeCloseTo(expectedEarned);
             });
             it('should return correct earned after deposit with 1 TON and 2 year passed', async () => {
                 blockchain.now = startDate + secondsInYear;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned = (Number(earnedInOneDay) * 365) / Number(scaleFactor);
                 expect(earnedFromNano).toBeCloseTo(expectedEarned);
@@ -434,10 +435,10 @@ describe('Kadys', () => {
                     jettonWallet: deployerJettonWallet,
                     amount: toNano(1),
                     sender: deployer,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInDay;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned =
                     //18/365 + 36/365
@@ -450,10 +451,10 @@ describe('Kadys', () => {
                     jettonWallet: deployerJettonWallet,
                     amount: toNano(1),
                     sender: deployer,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInWeek;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned = Number(earnedInOneDay) * 7 + Number(earnedInOneDay) * 2 * 7;
                 expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
@@ -464,10 +465,10 @@ describe('Kadys', () => {
                     jettonWallet: deployerJettonWallet,
                     amount: toNano(1),
                     sender: deployer,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInYear;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned = Number(earnedInOneDay) * 365 + Number(earnedInOneDay) * 2 * 365;
                 expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
@@ -478,10 +479,10 @@ describe('Kadys', () => {
                     jettonWallet: deployerJettonWallet,
                     amount: toNano(1),
                     sender: deployer,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInYear;
-                const earned = await kadys.getEarnedOfAddress(deployer.address);
+                const earned = await staking.getEarnedOfAddress(deployer.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned = Number(earnedInOneDay) * 365 + Number(earnedInOneDay) * 2 * 365;
                 expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
@@ -492,7 +493,7 @@ describe('Kadys', () => {
                     jettonWallet: playerJettonWallet,
                     amount: toNano(100),
                     sender: player,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInWeek;
 
@@ -500,17 +501,17 @@ describe('Kadys', () => {
                     jettonWallet: playerJettonWallet,
                     amount: toNano(200),
                     sender: player,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInWeek;
                 await sendJettonTest({
                     jettonWallet: playerJettonWallet,
                     amount: toNano(300),
                     sender: player,
-                    destination: kadys.address,
+                    destination: staking.address,
                 });
                 blockchain.now = blockchain.now + secondsInWeek;
-                const earned = await kadys.getEarnedOfAddress(player.address);
+                const earned = await staking.getEarnedOfAddress(player.address);
                 const earnedFromNano = fromEarnedToNumber(earned);
                 const expectedEarned =
                     numerizedEarnedInOneDay * 7 * 100 +
@@ -525,11 +526,11 @@ describe('Kadys', () => {
                 jettonWallet: playerJettonWallet,
                 amount: toNano(100),
                 sender: player,
-                destination: kadys.address,
+                destination: staking.address,
             });
             blockchain.now = blockchain.now + secondsInWeek;
 
-            await kadys.send(
+            await staking.send(
                 player.getSender(),
                 {
                     value: toNano('0.05'),
@@ -541,7 +542,7 @@ describe('Kadys', () => {
             );
             blockchain.now = blockchain.now + secondsInWeek;
 
-            const earned = await kadys.getEarnedOfAddress(player.address);
+            const earned = await staking.getEarnedOfAddress(player.address);
             const earnedFromNano = fromEarnedToNumber(earned);
             const expectedEarned = numerizedEarnedInOneDay * 7 * 100 + numerizedEarnedInOneDay * 7 * 50;
             expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
@@ -549,7 +550,7 @@ describe('Kadys', () => {
     });
     describe('ChangeYearlyPercent', () => {
         it('should change yearly percent', async () => {
-            const res = await kadys.send(
+            const res = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -561,12 +562,12 @@ describe('Kadys', () => {
             );
             expect(res.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: true,
             });
         });
         it('should not change yearly percent when called not by deployer', async () => {
-            const res = await kadys.send(
+            const res = await staking.send(
                 player.getSender(),
                 {
                     value: toNano('0.05'),
@@ -578,13 +579,13 @@ describe('Kadys', () => {
             );
             expect(res.transactions).toHaveTransaction({
                 from: player.address,
-                to: kadys.address,
+                to: staking.address,
                 success: false,
                 exitCode: 22276,
             });
         });
         it('should not change yearly percent when is out of range', async () => {
-            const res = await kadys.send(
+            const res = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -596,7 +597,7 @@ describe('Kadys', () => {
             );
             expect(res.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: false,
                 exitCode: 53383,
             });
@@ -607,17 +608,17 @@ describe('Kadys', () => {
                 jettonWallet: playerJettonWallet,
                 amount: toNano(100),
                 sender: player,
-                destination: kadys.address,
+                destination: staking.address,
             });
             blockchain.now = blockchain.now + secondsInWeek;
             await sendJettonTest({
                 jettonWallet: playerJettonWallet,
                 amount: toNano(200),
                 sender: player,
-                destination: kadys.address,
+                destination: staking.address,
             });
             blockchain.now = blockchain.now + secondsInWeek;
-            await kadys.send(
+            await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -631,14 +632,13 @@ describe('Kadys', () => {
                 jettonWallet: playerJettonWallet,
                 amount: toNano(300),
                 sender: player,
-                destination: kadys.address,
+                destination: staking.address,
             });
             blockchain.now = blockchain.now + secondsInWeek;
             const earnedInOneDay = toNano(0.18 / 365);
             const newEarnedInOneDay = Number(toNano(0.25 / 365));
             const numerizedEarnedInOneDay = Number(earnedInOneDay);
-            const allEarned = await kadys.getEarned();
-            const earned = await kadys.getEarnedOfAddress(player.address);
+            const earned = await staking.getEarnedOfAddress(player.address);
             const earnedFromNano = fromEarnedToNumber(earned);
             const expectedEarned =
                 numerizedEarnedInOneDay * 7 * 100 +
@@ -651,10 +651,10 @@ describe('Kadys', () => {
         it('should withdraw correct sum when called by owner', async () => {
             await deployer.send({
                 value: toNano('30'),
-                to: kadys.address,
+                to: staking.address,
             });
-            const initialBalance = await kadys.getBalance();
-            const response = await kadys.send(
+            const initialBalance = await staking.getBalance();
+            const response = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -664,24 +664,24 @@ describe('Kadys', () => {
                     amount: toNano('10'),
                 },
             );
-            const currentBalance = await kadys.getBalance();
+            const currentBalance = await staking.getBalance();
             expect(Number(currentBalance) / Number(scaleFactor)).toBeCloseTo(
                 Number(initialBalance) / Number(scaleFactor) - 10,
                 0,
             );
             expect(response.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: true,
             });
         });
         it('should not withdraw when called not by owner', async () => {
             await deployer.send({
                 value: toNano('30'),
-                to: kadys.address,
+                to: staking.address,
             });
-            const initialBalance = await kadys.getBalance();
-            const response = await kadys.send(
+            const initialBalance = await staking.getBalance();
+            const response = await staking.send(
                 player.getSender(),
                 {
                     value: toNano('0.5'),
@@ -691,11 +691,11 @@ describe('Kadys', () => {
                     amount: toNano('10'),
                 },
             );
-            const currentBalance = await kadys.getBalance();
+            const currentBalance = await staking.getBalance();
             expect(currentBalance).toEqual(initialBalance);
             expect(response.transactions).toHaveTransaction({
                 from: player.address,
-                to: kadys.address,
+                to: staking.address,
                 success: false,
                 exitCode: 27921,
             });
@@ -703,10 +703,10 @@ describe('Kadys', () => {
         it('should throw an error when trying to withdraw more than balance', async () => {
             await deployer.send({
                 value: toNano('30'),
-                to: kadys.address,
+                to: staking.address,
             });
-            const initialBalance = await kadys.getBalance();
-            const response = await kadys.send(
+            const initialBalance = await staking.getBalance();
+            const response = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.5'),
@@ -716,13 +716,13 @@ describe('Kadys', () => {
                     amount: toNano('100'),
                 },
             );
-            const currentBalance = await kadys.getBalance();
+            const currentBalance = await staking.getBalance();
             const numBalance = fromEarnedToNumber(currentBalance);
             const initNumBalance = fromEarnedToNumber(initialBalance);
             expect(numBalance).toBeCloseTo(initNumBalance);
             expect(response.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: false,
                 exitCode: 10603,
             });
@@ -732,7 +732,7 @@ describe('Kadys', () => {
     describe('WithdrawEarned', () => {
         beforeEach(async () => {
             await sendJettonTest({
-                destination: kadys.address,
+                destination: staking.address,
                 sender: deployer,
                 amount: toNano(100),
                 jettonWallet: deployerJettonWallet,
@@ -741,11 +741,11 @@ describe('Kadys', () => {
         it('should withdraw and update rewards', async () => {
             const initialJettonData = await deployerJettonWallet.getGetWalletData();
             blockchain.now = startDate + secondsInYear;
-            const earned = await kadys.getEarnedOfAddress(deployer.address);
+            const earned = await staking.getEarnedOfAddress(deployer.address);
             const earnedFromNano = fromEarnedToNumber(earned);
             const expectedEarned = (Number(earnedInOneDay) * 100 * 365) / Number(scaleFactor);
             expect(earnedFromNano).toBeCloseTo(expectedEarned);
-            const response = await kadys.send(
+            const response = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -759,16 +759,16 @@ describe('Kadys', () => {
             expect(afterWithdrawJettonData.balance).toBe(initialJettonData.balance + toNano(1));
             expect(response.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: true,
             });
-            const earnedAfterWithdraw = await kadys.getEarnedOfAddress(deployer.address);
+            const earnedAfterWithdraw = await staking.getEarnedOfAddress(deployer.address);
             const earnedAfterWithdrawFromNano = fromEarnedToNumber(earnedAfterWithdraw);
             expect(earnedAfterWithdrawFromNano).toEqual(earnedFromNano - 1);
         });
         it('should not withdraw when called with value more than available', async () => {
             blockchain.now = startDate + secondsInYear;
-            const response = await kadys.send(
+            const response = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -781,14 +781,14 @@ describe('Kadys', () => {
 
             expect(response.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: false,
                 exitCode: 15241,
             });
         });
         it('should withdraw when called with zero value', async () => {
             blockchain.now = startDate + secondsInYear;
-            const response = await kadys.send(
+            const response = await staking.send(
                 deployer.getSender(),
                 {
                     value: toNano('0.05'),
@@ -801,7 +801,7 @@ describe('Kadys', () => {
 
             expect(response.transactions).toHaveTransaction({
                 from: deployer.address,
-                to: kadys.address,
+                to: staking.address,
                 success: false,
                 exitCode: 61833,
             });
