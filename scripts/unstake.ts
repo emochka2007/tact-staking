@@ -4,7 +4,7 @@ import { Staking } from '../build/Staking/tact_Staking';
 export async function run(provider: NetworkProvider) {
     const stakingAddress = Address.parse(process.env.STAKING_ADDRESS!!);
     const staking = provider.open(Staking.fromAddress(stakingAddress));
-    const amount = 1n;
+    const amount = toNano('0.0001');
     await staking.send(
         provider.sender(),
         {

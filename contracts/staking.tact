@@ -24,6 +24,14 @@ contract Staking with Deployable, Ownable {
     }
 
     // --PRIVATE--
+    fun calcAllstake():Int{
+        let totalDeposit:Int = 0;
+        foreach (key, value in self.balanceOf) {
+            totalDeposit += value.totalDeposit;
+        }
+        return totalDeposit;
+    }
+
     fun updateAllDepositAt(){
         foreach (key, value in self.balanceOf) {
             self.updateUserRewards(key);
@@ -117,19 +125,19 @@ contract Staking with Deployable, Ownable {
         self.updateClaimed(sender, msg.amount);
         self.totalSupply -= msg.amount;
         send(SendParameters{
-            to: self.contractJettonWallet!!,
-            value: ton("0.000001"),
-            mode: (SendRemainingValue + SendIgnoreErrors),
-            bounce: false, // 0x7362d09c - notify new owner
-            body: TokenTransfer{
-                queryId: now(),
-                amount: msg.amount,
-                destination: context().sender,
-                response_destination: myAddress(),
-                custom_payload: null,
-                forward_ton_amount: ton("0.0000001"),
-                //working on tests
-                forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+        to: self.contractJettonWallet!!,
+        value: ton("0.000001"),
+        mode: (SendRemainingValue + SendIgnoreErrors),
+        bounce: false, // 0x7362d09c - notify new owner
+        body: TokenTransfer{
+        queryId: now(),
+        amount: msg.amount,
+        destination: context().sender,
+        response_destination: myAddress(),
+        custom_payload: null,
+        forward_ton_amount: ton("0.0000001"),
+        //working on tests
+        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
         }.toCell()
         }
         );
@@ -148,20 +156,20 @@ contract Staking with Deployable, Ownable {
         self.updateLastDepositDate(sender, now());
         send(
         SendParameters{
-            to: self.contractJettonWallet!!,
-            value: ton("0.000001"),
-            mode: (SendRemainingValue + SendIgnoreErrors),
-            bounce: false, // 0x7362d09c - notify new owner
-            body: TokenTransfer{
-                queryId: now(),
-                amount: msg.amount,
-                destination: context().sender,
-                response_destination: myAddress(),
-                custom_payload: null,
-                forward_ton_amount: ton("0.000001"),
-                forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+        to: self.contractJettonWallet!!,
+        value: ton("0.000001"),
+        mode: (SendRemainingValue + SendIgnoreErrors),
+        bounce: false, // 0x7362d09c - notify new owner
+        body: TokenTransfer{
+        queryId: now(),
+        amount: msg.amount,
+        destination: context().sender,
+        response_destination: myAddress(),
+        custom_payload: null,
+        forward_ton_amount: ton("0.000001"),
+        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
         }
-            .toCell()
+        .toCell()
         }
         );
     }
@@ -184,9 +192,32 @@ contract Staking with Deployable, Ownable {
         mode: SendRemainingValue + SendIgnoreErrors
         });
     }
+    receive(msg: WithdrawJetton){
+        require(sender() == self.owner, "Only owner is allowed to withdraw jetton");
+        require(self.calcAllstake() >= msg.amount, "Amount is more than available to withdraw");
+        send(SendParameters{
+            to: self.contractJettonWallet!!,
+            value: ton("0.000001"),
+            mode: (SendRemainingValue + SendIgnoreErrors),
+            bounce: false, // 0x7362d09c - notify new owner
+            body: TokenTransfer{
+            queryId: now(),
+            amount: msg.amount,
+            destination: msg.to,
+            response_destination: myAddress(),
+            custom_payload: null,
+            forward_ton_amount: ton("0.0000001"),
+            forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+        }.toCell()
+        }
+        );
+    }
     // Receive funds
     receive(){}
     // --GETTERS--
+    get fun totalStake(): Int {
+        return self.calcAllstake();
+    }
     get fun earnedOfAddress(user: Address): Int {
         return self.calcEarned(user) / scaleFactor;
     }

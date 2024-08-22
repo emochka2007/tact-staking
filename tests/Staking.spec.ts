@@ -807,4 +807,84 @@ describe('Staking', () => {
             });
         });
     });
+    describe('Withdraw Jetton', () => {
+        beforeEach(async () => {
+            const senderWalletAddress = await minter.getGetWalletAddress(deployer.address);
+            const senderWallet = blockchain.openContract(JettonDefaultWallet.fromAddress(senderWalletAddress));
+            const transferResult = await sendJettonTest({
+                jettonWallet: senderWallet,
+                amount: toNano(100),
+                sender: deployer,
+                destination: staking.address,
+            });
+        });
+        it('should withdraw when called by deployer', async () => {
+            const balance = await playerJettonWallet.getGetWalletData();
+            const withdrawResult = await staking.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'WithdrawJetton',
+                    amount: toNano('50'),
+                    to: player.address,
+                },
+            );
+            // console.log('staking jetton ', staking.address); //RZ
+            // console.log('player jetton ', playerJettonWallet.address); //jF
+            // console.log(' deployer ', deployer.address); //8g
+            // console.log('staking jetton ', stakingJettonWallet.address); //HI
+            // console.log('player  ', player.address); //ez
+            const newBalance = await playerJettonWallet.getGetWalletData();
+            expect(newBalance.balance).toBe(balance.balance + toNano('50'));
+            expect(withdrawResult.transactions).toHaveTransaction({
+                from: stakingJettonWallet.address,
+                to: playerJettonWallet.address,
+                success: true,
+            });
+        });
+        it('should throw an error when called not by deployer', async () => {
+            const withdrawResult = await staking.send(
+                player.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'WithdrawJetton',
+                    amount: toNano('50'),
+                    to: player.address,
+                },
+            );
+            const newBalance = await playerJettonWallet.getGetWalletData();
+            expect(newBalance.balance).toBe(toNano(1000));
+            expect(withdrawResult.transactions).toHaveTransaction({
+                from: player.address,
+                to: staking.address,
+                success: false,
+                exitCode: 31741,
+            });
+        });
+        it('should throw an error when withdraw more than available', async () => {
+            const withdrawResult = await staking.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'WithdrawJetton',
+                    amount: toNano('10000'),
+                    to: player.address,
+                },
+            );
+            const newBalance = await playerJettonWallet.getGetWalletData();
+            expect(newBalance.balance).toBe(toNano(1000));
+            expect(withdrawResult.transactions).toHaveTransaction({
+                from: deployer.address,
+                to: staking.address,
+                success: false,
+                exitCode: 27170,
+            });
+        });
+    });
 });

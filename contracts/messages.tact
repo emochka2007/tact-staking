@@ -3,9 +3,9 @@ struct UserStake {
     lastDepositAt: Int;
     totalDeposit: Int;
 }
-struct Withdrawal {
-    address: Address;
-    amount: Int;
+message WithdrawJetton {
+    amount: Int as uint64;
+    to: Address;
 }
 message Unstake {
     amount: Int;

@@ -5,8 +5,8 @@ import { Staking } from '../build/Staking/tact_Staking';
 
 export async function run(provider: NetworkProvider) {
     const stakingAddress = Address.parse(process.env.STAKING_ADDRESS!!);
-    const minterAddress = Address.parse(process.env.MINTER_ADDRESS!!);
-    const stakingJetton = await getJettonAddress(stakingAddress, minterAddress);
+    const jettonMaster = Address.parse(process.env.JETTON_MASTER!!);
+    const stakingJetton = await getJettonAddress(stakingAddress, jettonMaster);
     const staking = provider.open(Staking.fromAddress(stakingAddress));
     await staking.send(
         provider.sender(),

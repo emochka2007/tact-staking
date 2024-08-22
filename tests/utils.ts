@@ -52,7 +52,7 @@ type SendJettonProps = {
     amount: bigint;
 };
 export const sendJetton = async ({ provider, destination, amount }: SendJettonProps) => {
-    const minterAddress = Address.parse(process.env.MINTER_ADDRESS!!);
+    const minterAddress = Address.parse(process.env.JETTON_MASTER!!);
     const hotWallet = Address.parse(process.env.OWNER_ADDRESS!!);
     const ownerJetton = await getJettonAddress(hotWallet, minterAddress);
     const jettonWallet = provider.open(JettonDefaultWallet.fromAddress(Address.parse(ownerJetton)));
