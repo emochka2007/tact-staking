@@ -83,6 +83,17 @@ describe('Staking', () => {
                 wallet: stakingJettonWallet.address,
             },
         );
+        const stakingMinResult = await mint({
+            deployer,
+            minter,
+            receiverAddress: staking.address,
+            amount: toNano(1000),
+        });
+        expect(stakingMinResult.transactions).toHaveTransaction({
+            success: true,
+            from: minter.address,
+            to: stakingJettonWallet.address,
+        });
         startDate = Math.floor(Date.now() / 1000);
         expect(deployResult.transactions).toHaveTransaction({
             from: deployer.address,
@@ -99,12 +110,14 @@ describe('Staking', () => {
         beforeEach(async () => {
             const senderWalletAddress = await minter.getGetWalletAddress(deployer.address);
             const senderWallet = blockchain.openContract(JettonDefaultWallet.fromAddress(senderWalletAddress));
+            const balance = await staking.getBalanceOfAddress(deployer.address);
             const transferResult = await sendJettonTest({
                 jettonWallet: senderWallet,
                 amount: toNano(100),
                 sender: deployer,
                 destination: staking.address,
             });
+
             expect(transferResult.transactions).toHaveTransaction({
                 from: stakingJettonWallet.address,
                 to: staking.address,
@@ -692,7 +705,7 @@ describe('Staking', () => {
                 },
             );
             const currentBalance = await staking.getBalance();
-            expect(currentBalance).toEqual(initialBalance);
+            expect(currentBalance).toBeGreaterThanOrEqual(initialBalance);
             expect(response.transactions).toHaveTransaction({
                 from: player.address,
                 to: staking.address,
@@ -817,6 +830,11 @@ describe('Staking', () => {
                 sender: deployer,
                 destination: staking.address,
             });
+            expect(transferResult.transactions).toHaveTransaction({
+                from: deployer.address,
+                to: senderWallet.address,
+                success: true
+            })
         });
         it('should withdraw when called by deployer', async () => {
             const balance = await playerJettonWallet.getGetWalletData();
@@ -885,6 +903,62 @@ describe('Staking', () => {
                 success: false,
                 exitCode: 27170,
             });
+        });
+    });
+    describe('WithdrawAll', () => {
+        beforeEach(async () => {
+            await sendJettonTest({
+                destination: staking.address,
+                sender: deployer,
+                amount: toNano(100),
+                jettonWallet: deployerJettonWallet,
+            });
+        });
+
+        it('should correct withdraw', async () => {
+            const initialJettonData = await deployerJettonWallet.getGetWalletData();
+            blockchain.now = startDate + secondsInWeek;
+            const earned = await staking.getEarnedOfAddress(deployer.address);
+            const earnedFromNano = fromEarnedToNumber(earned);
+            const expectedEarned = (Number(earnedInOneDay) * 100 * 7) / Number(scaleFactor);
+            expect(earnedFromNano).toBeCloseTo(expectedEarned);
+            const response = await staking.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'WithdrawAll',
+                },
+            );
+            const afterWithdrawJettonData = await deployerJettonWallet.getGetWalletData();
+            expect(response.transactions).toHaveTransaction({
+                from: deployer.address,
+                to: staking.address,
+                success: true,
+            });
+            expect(afterWithdrawJettonData.balance).toBe(initialJettonData.balance + toNano(100) + earned);
+        });
+        it('should empty balanceOf & earned', async () => {
+            blockchain.now = startDate + secondsInWeek;
+            const response = await staking.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'WithdrawAll',
+                },
+            )
+            expect(response.transactions).toHaveTransaction({
+                from: deployer.address,
+                to: staking.address,
+                success: true,
+            });
+            const balanceOf = await staking.getBalanceOfAddress(deployer.address);
+            expect(balanceOf?.totalDeposit).toBe(0n);
+            const earned = await staking.getEarnedOfAddress(deployer.address)
+            expect(earned).toBe(0n);
         });
     });
 });

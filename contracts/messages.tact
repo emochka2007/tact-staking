@@ -16,6 +16,9 @@ message Withdraw {
 message ChangeYearlyPercent {
     newPercent: Int as uint32;
 }
+message WithdrawAll {
+
+}
 // EVENTS
 message StakeEvent {
     address: Address;

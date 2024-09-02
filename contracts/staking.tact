@@ -24,7 +24,8 @@ contract Staking with Deployable, Ownable {
     }
 
     // --PRIVATE--
-    fun calcAllstake():Int{
+    // Helper function for calculation
+    fun calcAllStake():Int{
         let totalDeposit:Int = 0;
         foreach (key, value in self.balanceOf) {
             totalDeposit += value.totalDeposit;
@@ -32,12 +33,15 @@ contract Staking with Deployable, Ownable {
         return totalDeposit;
     }
 
+    // Updating each stake deposit (used after changin the yearly percent)
     fun updateAllDepositAt(){
         foreach (key, value in self.balanceOf) {
             self.updateUserRewards(key);
             self.updateLastDepositDate(key, now());
         }
     }
+
+    // Updating claimed after unstake or withdrawAll
     fun updateClaimed(user: Address, amount: Int){
         let claimed: Int? = self.claimedFromStake.get(user);
         if(claimed == null){
@@ -47,7 +51,7 @@ contract Staking with Deployable, Ownable {
             self.claimedFromStake.set(user, amount + userClaimed);
         }
     }
-    // Func is used to calculate rewards by user
+    // Helper function to decrease stake
     fun decreaseUserStake(user: Address, amount: Int){
         require(self.balanceOf.get(user) != null, "User not found");
         let userStake: UserStake = self.balanceOf.get(user)!!;
@@ -56,6 +60,16 @@ contract Staking with Deployable, Ownable {
         totalDeposit: userStake.totalDeposit - amount, lastDepositAt: now()};
         self.balanceOf.set(user, newUserStake);
     }
+
+    // Empty the stake balance of user
+    fun withdrawAllUserStake(user: Address){
+        require(self.balanceOf.get(user) != null, "User not found");
+        let userStake: UserStake = self.balanceOf.get(user)!!;
+        let newUserStake = UserStake{
+        totalDeposit: 0, lastDepositAt: now()};
+        self.balanceOf.set(user, newUserStake);
+    }
+    // Helper function to update last deposit of user
     fun updateLastDepositDate(user: Address, date: Int){
         require(sender() == self.owner, "Only owner is allowed to withdraw");
         require(self.balanceOf.get(user) != null, "User not found");
@@ -64,6 +78,7 @@ contract Staking with Deployable, Ownable {
         totalDeposit: userStake.totalDeposit, lastDepositAt: date};
         self.balanceOf.set(user, newUserStake);
     }
+    // Helper function to increase user stake
     fun increaseUserStake(user: Address, amount: Int){
         require(self.balanceOf.get(user) != null, "User not found");
         let userStake: UserStake = self.balanceOf.get(user)!!;
@@ -71,6 +86,7 @@ contract Staking with Deployable, Ownable {
         totalDeposit: userStake.totalDeposit + amount, lastDepositAt: now()};
         self.balanceOf.set(user, newUserStake);
     }
+    // Main calculation func to get the current rewards of the user
     fun calcEarned(address: Address): Int {
         let getUser: UserStake? = self.balanceOf.get(address);
         require(getUser!= null, "User not found when calculating rewards");
@@ -108,7 +124,6 @@ contract Staking with Deployable, Ownable {
             totalDeposit: msg.amount, lastDepositAt: now()});
             self.updateUserRewards(msg.sender);
         } else {
-            let currentStake= userStaked!!;
             self.updateUserRewards(msg.sender);
             self.increaseUserStake(msg.sender, msg.amount);
         }
@@ -116,6 +131,7 @@ contract Staking with Deployable, Ownable {
         emit(StakeEvent{
         address: msg.sender, amount: msg.amount}.toCell());
     }
+    // Only withdraw deposit
     receive(msg: Unstake) {
         require(msg.amount > 0, "Amount must be above zero");
         require(self.contractJettonWallet != null, "Jetton address must be sent");
@@ -145,8 +161,10 @@ contract Staking with Deployable, Ownable {
         address: sender, amount: msg.amount}.toCell());
         self.reply("Refund gas excess".asComment());
     }
+    // Only withdraw rewards
     receive(msg: WithdrawEarned){
         require(msg.amount > 0, "Amount must be above zero");
+        require(self.contractJettonWallet != null, "Jetton address must be sent");
         let sender: Address= sender();
         require(self.userEarned.get(sender) != null, "User not found");
         let earned: Int = self.calcEarned(sender);
@@ -173,6 +191,37 @@ contract Staking with Deployable, Ownable {
         }
         );
     }
+    // Withdraw rewards + deposit
+    receive(msg: WithdrawAll) {
+        let sender: Address= sender();
+        require(self.userEarned.get(sender) != null, "User not found");
+        require(self.balanceOf.get(sender) != null, "User not found");
+        let earned: Int = self.calcEarned(sender);
+        let deposited: UserStake = self.balanceOf.get(sender)!!;
+        let totalAmount: Int = self.calcEarned(sender) / scaleFactor + deposited.totalDeposit;
+        dump(totalAmount);
+        self.userEarned.set(sender, 0);
+        self.withdrawAllUserStake(sender);
+        self.updateLastDepositDate(sender, now());
+        send(
+        SendParameters{
+        to: self.contractJettonWallet!!,
+        value: ton("0.000001"),
+        mode: (SendRemainingValue + SendIgnoreErrors),
+        bounce: false, // 0x7362d09c - notify new owner
+        body: TokenTransfer{
+        queryId: now(),
+        amount: totalAmount,
+        destination: context().sender,
+        response_destination: myAddress(),
+        custom_payload: null,
+        forward_ton_amount: ton("0.000001"),
+        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+        }
+        .toCell()
+        }
+        );
+    }
     receive(msg: ChangeYearlyPercent){
         require(sender() == self.owner, "Only owner is allowed to call ChangeYearlyPercent");
         require(msg.newPercent > 0, "New yearly percent must be above zero");
@@ -181,7 +230,7 @@ contract Staking with Deployable, Ownable {
         self.yearlyPercent = msg.newPercent * scaleFactor /100;
         self.reply("Refund gas excess".asComment());
     }
-    //Withraw
+    //Withraw ton from contract
     receive(msg: Withdraw) {
         require(sender() == self.owner, "Only owner is allowed to withdraw");
         require(self.balance() >= msg.amount, "Balance is less than msg.amount");
@@ -192,9 +241,10 @@ contract Staking with Deployable, Ownable {
         mode: SendRemainingValue + SendIgnoreErrors
         });
     }
+    // Withdraw staked jetton from contract
     receive(msg: WithdrawJetton){
         require(sender() == self.owner, "Only owner is allowed to withdraw jetton");
-        require(self.calcAllstake() >= msg.amount, "Amount is more than available to withdraw");
+        require(self.calcAllStake() >= msg.amount, "Amount is more than available to withdraw");
         send(SendParameters{
             to: self.contractJettonWallet!!,
             value: ton("0.000001"),
@@ -216,7 +266,7 @@ contract Staking with Deployable, Ownable {
     receive(){}
     // --GETTERS--
     get fun totalStake(): Int {
-        return self.calcAllstake();
+        return self.calcAllStake();
     }
     get fun earnedOfAddress(user: Address): Int {
         return self.calcEarned(user) / scaleFactor;

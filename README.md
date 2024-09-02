@@ -24,7 +24,13 @@ Fill the `.env` file with variables from `.env.example`
 
 ## Kadys Contract Overview
 ## Visualisation of each script
-### Roadmap / Workflow
+### Roadmap / Workflow to stake and unstake
+- Deploy 
+- Set the jetton wallet inside contract, script `setJettonWallet`
+- Call `stake` script or transfer funds to staking address 
+- `Unstake` - withdraw deposit funds 
+- `WithdrawEarned` - withdraw rewards
+- `WithdrawAll` - withdraw everything (deposit + rewards)
 ![Workflow](docs/workflow.png)
 ### Stake
 ![Stake](docs/stake.png)

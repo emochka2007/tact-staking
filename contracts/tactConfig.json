@@ -1,0 +1,10 @@
+{
+  "projects": [
+    {
+      "name": "Staking",
+      "path": "./staking.tact",
+      "output": "./build",
+      "options": {}
+    }
+  ]
+}

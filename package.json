@@ -4,7 +4,8 @@
     "scripts": {
         "start": "blueprint run",
         "build": "blueprint build",
-        "test": "jest --verbose"
+        "test": "jest --verbose",
+        "misti": "blueprint misti --config ./mistiConfig.json contracts/tactConfig.json"
     },
     "devDependencies": {
         "@ton/blueprint": "^0.22.0",
@@ -22,6 +23,8 @@
         "typescript": "^5.5.3"
     },
     "dependencies": {
+        "@nowarp/blueprint-misti": "^0.2.6",
+        "@nowarp/misti": "^0.2.2",
         "@orbs-network/ton-access": "^2.3.3",
         "tonweb": "^0.0.66"
     }

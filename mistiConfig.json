@@ -1,0 +1,13 @@
+{
+  "detectors": [
+    { "className": "DivideBeforeMultiply" },
+    { "className": "UnboundLoops" },
+    { "className": "ZeroAddress" },
+    { "className": "BranchDuplicate" },
+    { "className": "FieldDoubleInit" },
+    { "className": "PreferAugmentedAssign" }
+  ],
+  "ignoredProjects": [],
+  "unusedPrefix": "_",
+  "verbosity": "default"
+}
