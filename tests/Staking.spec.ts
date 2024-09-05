@@ -961,4 +961,9 @@ describe('Staking', () => {
             expect(earned).toBe(0n);
         });
     });
+    describe('getYearlyPercent', () => {
+       it('should return correct yearly percent', async () => {
+           expect(await staking.getYearlyPercent()).toEqual(18n)
+       })
+    });
 });

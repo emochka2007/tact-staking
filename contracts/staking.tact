@@ -292,4 +292,7 @@ contract Staking with Deployable, Ownable {
     get fun jettonWallet(): Address? {
         return self.contractJettonWallet;
     }
+    get fun yearlyPercent(): Int {
+        return self.yearlyPercent * 100 / scaleFactor;
+    }
 }

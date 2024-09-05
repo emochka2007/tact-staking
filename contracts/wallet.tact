@@ -120,11 +120,11 @@ contract JettonDefaultWallet {
     }
 
     get fun msgValue(value: Int): Int {
-        let msgValue: Int = value;
-        let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
+        let newMsgValue: Int = value;
+        let tonBalanceBeforeMsg: Int = myBalance() - newMsgValue;
         let storageFee: Int = self.minTonsForStorage - min(tonBalanceBeforeMsg, self.minTonsForStorage);
-        msgValue = msgValue - (storageFee + self.gasConsumption);
-        return msgValue;
+        newMsgValue = newMsgValue - (storageFee + self.gasConsumption);
+        return newMsgValue;
     }
 
     bounced(src: bounced<TokenTransferInternal>) {
