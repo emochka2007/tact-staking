@@ -71,7 +71,6 @@ contract Staking with Deployable, Ownable {
     }
     // Helper function to update last deposit of user
     fun updateLastDepositDate(user: Address, date: Int){
-        require(sender() == self.owner, "Only owner is allowed to withdraw");
         require(self.balanceOf.get(user) != null, "User not found");
         let userStake: UserStake = self.balanceOf.get(user)!!;
         let newUserStake = UserStake{
