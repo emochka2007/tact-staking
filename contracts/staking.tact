@@ -19,7 +19,8 @@ contract Staking with Deployable, Ownable {
     init() {
         self.owner = sender();
         // Using scale factor to handle decimals
-        self.yearlyPercent = 18 * scaleFactor / 100;
+        // Percent * 100 / 1e9 / 10000
+        self.yearlyPercent = 1800 * scaleFactor;
         self.totalSupply = 0;
     }
 
@@ -99,7 +100,7 @@ contract Staking with Deployable, Ownable {
         if(stakingDuration > secondsPerYear){
             stakingDuration = secondsPerYear;
         }
-        return existUser.totalDeposit * self.yearlyPercent * stakingDuration / secondsPerYear + existRewards;
+        return existUser.totalDeposit * self.yearlyPercent / 10000  * stakingDuration / secondsPerYear + existRewards;
     }
     // Func is used to update user rewards inside mapping
     fun updateUserRewards(user: Address){
@@ -226,7 +227,8 @@ contract Staking with Deployable, Ownable {
         require(msg.newPercent > 0, "New yearly percent must be above zero");
         // We are updating all of the last deposits earned and store them inside earned map before updating the percent
         self.updateAllDepositAt();
-        self.yearlyPercent = msg.newPercent * scaleFactor /100;
+        // Handle float values here (newPercent = 1850) for exampe
+        self.yearlyPercent = msg.newPercent * scaleFactor;
         self.reply("Refund gas excess".asComment());
     }
     //Withraw ton from contract
@@ -293,6 +295,7 @@ contract Staking with Deployable, Ownable {
         return self.contractJettonWallet;
     }
     get fun yearlyPercent(): Int {
-        return self.yearlyPercent * 100 / scaleFactor;
+        dump(self.yearlyPercent);
+        return self.yearlyPercent / scaleFactor;
     }
 }

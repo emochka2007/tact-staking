@@ -578,7 +578,28 @@ describe('Staking', () => {
                 to: staking.address,
                 success: true,
             });
+            const newPercent = await staking.getYearlyPercent()
+            expect(newPercent).toEqual(2000n)
         });
+        it('should change to float yearly percent', async ()=> {
+            const res = await staking.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'ChangeYearlyPercent',
+                    newPercent: 2050n,
+                },
+            );
+            expect(res.transactions).toHaveTransaction({
+                from: deployer.address,
+                to: staking.address,
+                success: true,
+            });
+            const newPercent = await staking.getYearlyPercent()
+            expect(newPercent).toEqual(2050n)
+        })
         it('should not change yearly percent when called not by deployer', async () => {
             const res = await staking.send(
                 player.getSender(),
@@ -638,7 +659,7 @@ describe('Staking', () => {
                 },
                 {
                     $$type: 'ChangeYearlyPercent',
-                    newPercent: 25n,
+                    newPercent: 2500n,
                 },
             );
             await sendJettonTest({
@@ -659,6 +680,50 @@ describe('Staking', () => {
                 newEarnedInOneDay * 6 * 7 * 100;
             expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
         });
+        it('should correctly change after setting float values', async ()=> {
+            blockchain.now = startDate + secondsInWeek;
+            await sendJettonTest({
+                jettonWallet: playerJettonWallet,
+                amount: toNano(100),
+                sender: player,
+                destination: staking.address,
+            });
+            blockchain.now = blockchain.now + secondsInWeek;
+            await sendJettonTest({
+                jettonWallet: playerJettonWallet,
+                amount: toNano(200),
+                sender: player,
+                destination: staking.address,
+            });
+            blockchain.now = blockchain.now + secondsInWeek;
+            await staking.send(
+                deployer.getSender(),
+                {
+                    value: toNano('0.05'),
+                },
+                {
+                    $$type: 'ChangeYearlyPercent',
+                    newPercent: 2550n,
+                },
+            );
+            await sendJettonTest({
+                jettonWallet: playerJettonWallet,
+                amount: toNano(300),
+                sender: player,
+                destination: staking.address,
+            });
+            blockchain.now = blockchain.now + secondsInWeek;
+            const earnedInOneDay = toNano(0.18 / 365);
+            const newEarnedInOneDay = Number(toNano(0.255 / 365));
+            const numerizedEarnedInOneDay = Number(earnedInOneDay);
+            const earned = await staking.getEarnedOfAddress(player.address);
+            const earnedFromNano = fromEarnedToNumber(earned);
+            const expectedEarned =
+                numerizedEarnedInOneDay * 7 * 100 +
+                numerizedEarnedInOneDay * 3 * 7 * 100 +
+                newEarnedInOneDay * 6 * 7 * 100;
+            expect(earnedFromNano).toBeCloseTo(expectedEarned / Number(scaleFactor));
+        })
     });
     describe('Withdraw', () => {
         it('should withdraw correct sum when called by owner', async () => {
@@ -963,7 +1028,7 @@ describe('Staking', () => {
     });
     describe('getYearlyPercent', () => {
        it('should return correct yearly percent', async () => {
-           expect(await staking.getYearlyPercent()).toEqual(18n)
+           expect(await staking.getYearlyPercent()).toEqual(1800n)
        })
     });
 });
