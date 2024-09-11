@@ -132,65 +132,65 @@ contract Staking with Deployable, Ownable {
         address: msg.sender, amount: msg.amount}.toCell());
     }
     // Only withdraw deposit
-    receive(msg: Unstake) {
-        require(msg.amount > 0, "Amount must be above zero");
-        require(self.contractJettonWallet != null, "Jetton address must be sent");
-        let sender: Address = sender();
-        self.updateUserRewards(sender);
-        self.decreaseUserStake(sender, msg.amount);
-        self.updateClaimed(sender, msg.amount);
-        self.totalSupply -= msg.amount;
-        send(SendParameters{
-        to: self.contractJettonWallet!!,
-        value: ton("0.000001"),
-        mode: (SendRemainingValue + SendIgnoreErrors),
-        bounce: false, // 0x7362d09c - notify new owner
-        body: TokenTransfer{
-        queryId: now(),
-        amount: msg.amount,
-        destination: context().sender,
-        response_destination: myAddress(),
-        custom_payload: null,
-        forward_ton_amount: ton("0.0000001"),
-        //working on tests
-        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
-        }.toCell()
-        }
-        );
-        emit(UnstakeEvent{
-        address: sender, amount: msg.amount}.toCell());
-        self.reply("Refund gas excess".asComment());
-    }
-    // Only withdraw rewards
-    receive(msg: WithdrawEarned){
-        require(msg.amount > 0, "Amount must be above zero");
-        require(self.contractJettonWallet != null, "Jetton address must be sent");
-        let sender: Address= sender();
-        require(self.userEarned.get(sender) != null, "User not found");
-        let earned: Int = self.calcEarned(sender);
-        let scaledMsgAmount = msg.amount * scaleFactor;
-        require(earned >= scaledMsgAmount, "Amount is above the earned value");
-        self.userEarned.set(sender, earned - scaledMsgAmount);
-        self.updateLastDepositDate(sender, now());
-        send(
-        SendParameters{
-        to: self.contractJettonWallet!!,
-        value: ton("0.000001"),
-        mode: (SendRemainingValue + SendIgnoreErrors),
-        bounce: false, // 0x7362d09c - notify new owner
-        body: TokenTransfer{
-        queryId: now(),
-        amount: msg.amount,
-        destination: context().sender,
-        response_destination: myAddress(),
-        custom_payload: null,
-        forward_ton_amount: ton("0.000001"),
-        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
-        }
-        .toCell()
-        }
-        );
-    }
+//    receive(msg: Unstake) {
+//        require(msg.amount > 0, "Amount must be above zero");
+//        require(self.contractJettonWallet != null, "Jetton address must be sent");
+//        let sender: Address = sender();
+//        self.updateUserRewards(sender);
+//        self.decreaseUserStake(sender, msg.amount);
+//        self.updateClaimed(sender, msg.amount);
+//        self.totalSupply -= msg.amount;
+//        send(SendParameters{
+//        to: self.contractJettonWallet!!,
+//        value: ton("0.000001"),
+//        mode: (SendRemainingValue + SendIgnoreErrors),
+//        bounce: false, // 0x7362d09c - notify new owner
+//        body: TokenTransfer{
+//        queryId: now(),
+//        amount: msg.amount,
+//        destination: context().sender,
+//        response_destination: myAddress(),
+//        custom_payload: null,
+//        forward_ton_amount: ton("0.0000001"),
+//        //working on tests
+//        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+//        }.toCell()
+//        }
+//        );
+//        emit(UnstakeEvent{
+//        address: sender, amount: msg.amount}.toCell());
+//        self.reply("Refund gas excess".asComment());
+//    }
+//    // Only withdraw rewards
+//    receive(msg: WithdrawEarned){
+//        require(msg.amount > 0, "Amount must be above zero");
+//        require(self.contractJettonWallet != null, "Jetton address must be sent");
+//        let sender: Address= sender();
+//        require(self.userEarned.get(sender) != null, "User not found");
+//        let earned: Int = self.calcEarned(sender);
+//        let scaledMsgAmount = msg.amount * scaleFactor;
+//        require(earned >= scaledMsgAmount, "Amount is above the earned value");
+//        self.userEarned.set(sender, earned - scaledMsgAmount);
+//        self.updateLastDepositDate(sender, now());
+//        send(
+//        SendParameters{
+//        to: self.contractJettonWallet!!,
+//        value: ton("0.000001"),
+//        mode: (SendRemainingValue + SendIgnoreErrors),
+//        bounce: false, // 0x7362d09c - notify new owner
+//        body: TokenTransfer{
+//        queryId: now(),
+//        amount: msg.amount,
+//        destination: context().sender,
+//        response_destination: myAddress(),
+//        custom_payload: null,
+//        forward_ton_amount: ton("0.000001"),
+//        forward_payload: beginCell().storeUint(0,1).endCell().asSlice()
+//        }
+//        .toCell()
+//        }
+//        );
+//    }
     // Withdraw rewards + deposit
     receive(msg: WithdrawAll) {
         let sender: Address= sender();
@@ -199,7 +199,6 @@ contract Staking with Deployable, Ownable {
         let earned: Int = self.calcEarned(sender);
         let deposited: UserStake = self.balanceOf.get(sender)!!;
         let totalAmount: Int = self.calcEarned(sender) / scaleFactor + deposited.totalDeposit;
-        dump(totalAmount);
         self.userEarned.set(sender, 0);
         self.withdrawAllUserStake(sender);
         self.updateLastDepositDate(sender, now());
@@ -245,7 +244,6 @@ contract Staking with Deployable, Ownable {
     // Withdraw staked jetton from contract
     receive(msg: WithdrawJetton){
         require(sender() == self.owner, "Only owner is allowed to withdraw jetton");
-        require(self.calcAllStake() >= msg.amount, "Amount is more than available to withdraw");
         send(SendParameters{
             to: self.contractJettonWallet!!,
             value: ton("0.000001"),
@@ -295,7 +293,6 @@ contract Staking with Deployable, Ownable {
         return self.contractJettonWallet;
     }
     get fun yearlyPercent(): Int {
-        dump(self.yearlyPercent);
         return self.yearlyPercent / scaleFactor;
     }
 }
