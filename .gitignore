@@ -3,6 +3,7 @@ temp
 build
 dist
 .DS_Store
+coverage
 
 # VS Code
 .vscode/*
